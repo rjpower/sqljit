@@ -560,7 +560,7 @@ mptest:	mptester$(EXE)
 # files are automatically generated.  This target takes care of
 # all that automatic generation.
 #
-.target_source:	$(SRC) $(TOP)/tool/vdbe-compress.tcl
+.target_source:	$(SRC) $(TOP)/tool/vdbe-compress.tcl $(TOP)/tool/vdbe-functions.py
 	rm -rf tsrc
 	mkdir tsrc
 	cp -f $(SRC) tsrc
@@ -586,6 +586,7 @@ sqlite3-all.c:	sqlite3.c $(TOP)/tool/split-sqlite3c.tcl
 # Rule to build the amalgamation
 #
 sqlite3.lo:	sqlite3.c
+
 	$(LTCOMPILE) $(TEMP_STORE) -c sqlite3.c
 
 # Rules to build the LEMON compiler generator
@@ -785,8 +786,10 @@ util.lo:	$(TOP)/src/util.c $(HDR)
 vacuum.lo:	$(TOP)/src/vacuum.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vacuum.c
 
-vdbe.lo:	$(TOP)/src/vdbe.c $(HDR)
-	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vdbe.c
+vdbe.lo:	$(TOP)/src/vdbe.c $(TOP)/tool/vdbe-functions.py $(HDR)
+	$(TCLSH_CMD) $(TOP)/tool/vdbe-compress.tcl $(OPTS) < src/vdbe.c >vdbe.compressed
+	$(PYTHON_CMD) $(TOP)/tool/vdbe-functions.py $(OPTS) < vdbe.compressed > vdbe.new.c
+	$(LTCOMPILE) $(TEMP_STORE) -c vdbe.new.c
 
 vdbeapi.lo:	$(TOP)/src/vdbeapi.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vdbeapi.c
