@@ -59,6 +59,8 @@ READLINE_FLAGS = -DHAVE_READLINE=@TARGET_HAVE_READLINE@ @TARGET_READLINE_INC@
 #
 LIBREADLINE = @TARGET_READLINE_LIBS@
 
+LIBLUAJIT = -Ldeps/luajit-2.0/src -lluajit -lm
+
 # Should the database engine be compiled threadsafe
 #
 TCC += -DSQLITE_THREADSAFE=@SQLITE_THREADSAFE@
@@ -135,7 +137,6 @@ USE_GCOV = @USE_GCOV@
 LTCOMPILE_EXTRAS += $(GCOV_CFLAGS$(USE_GCOV))
 LTLINK_EXTRAS += $(GCOV_LDFLAGS$(USE_GCOV))
 
-
 # The directory into which to store package information for
 
 # Some standard variables and programs
@@ -184,7 +185,8 @@ LIBOBJS0 = alter.lo analyze.lo attach.lo auth.lo \
          table.lo threads.lo tokenize.lo trigger.lo \
          update.lo util.lo vacuum.lo \
          vdbe.lo vdbeapi.lo vdbeaux.lo vdbeblob.lo vdbemem.lo vdbesort.lo \
-         vdbetrace.lo wal.lo walker.lo where.lo utf.lo vtab.lo
+         vdbetrace.lo wal.lo walker.lo where.lo utf.lo vtab.lo \
+	 lua-support.lo
 
 # Object files for the amalgamation.
 #
@@ -534,7 +536,7 @@ libtclsqlite3.la:	tclsqlite.lo libsqlite3.la
 sqlite3$(TEXE):	$(TOP)/src/shell.c libsqlite3.la sqlite3.h
 	$(LTLINK) $(READLINE_FLAGS) \
 		-o $@ $(TOP)/src/shell.c libsqlite3.la \
-		$(LIBREADLINE) $(TLIBS) -rpath "$(libdir)"
+		$(LIBREADLINE) $(LIBLUAJIT) $(TLIBS) -rpath "$(libdir)"
 
 mptester$(EXE):	sqlite3.c $(TOP)/mptest/mptest.c
 	$(LTLINK) -o $@ -I. $(TOP)/mptest/mptest.c sqlite3.c \
@@ -566,8 +568,8 @@ mptest:	mptester$(EXE)
 	cp -f $(SRC) tsrc
 	rm tsrc/sqlite.h.in tsrc/parse.y
 	$(TCLSH_CMD) $(TOP)/tool/vdbe-compress.tcl $(OPTS) <tsrc/vdbe.c >vdbe.compressed
-	$(PYTHON_CMD) $(TOP)/tool/vdbe-functions.py $(OPTS) < vdbe.compressed > vdbe.new
-	mv vdbe.new tsrc/vdbe.c
+	#$(PYTHON_CMD) $(TOP)/tool/vdbe-functions.py $(OPTS) < vdbe.compressed > vdbe.new
+	mv vdbe.compressed tsrc/vdbe.c
 	touch .target_source
 
 sqlite3.c:	.target_source $(TOP)/tool/mksqlite3c.tcl
@@ -787,9 +789,12 @@ vacuum.lo:	$(TOP)/src/vacuum.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vacuum.c
 
 vdbe.lo:	$(TOP)/src/vdbe.c $(TOP)/tool/vdbe-functions.py $(HDR)
-	$(TCLSH_CMD) $(TOP)/tool/vdbe-compress.tcl $(OPTS) < src/vdbe.c >vdbe.compressed
-	$(PYTHON_CMD) $(TOP)/tool/vdbe-functions.py $(OPTS) < vdbe.compressed > vdbe.new.c
-	$(LTCOMPILE) $(TEMP_STORE) -c vdbe.new.c
+	mkdir -p tsrc
+	$(TCLSH_CMD) $(TOP)/tool/vdbe-compress.tcl $(OPTS) < src/vdbe.c > tsrc/vdbe.c
+	$(LTCOMPILE) $(TEMP_STORE) -c tsrc/vdbe.c
+
+lua-support.lo:	$(TOP)/src/lua-support.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/lua-support.c
 
 vdbeapi.lo:	$(TOP)/src/vdbeapi.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vdbeapi.c
@@ -839,7 +844,7 @@ tclsqlite3$(TEXE):	tclsqlite-shell.lo libsqlite3.la
 opcodes.c:	opcodes.h $(TOP)/mkopcodec.awk
 	$(NAWK) -f $(TOP)/mkopcodec.awk opcodes.h >opcodes.c
 
-opcodes.h:	parse.h $(TOP)/src/vdbe.c $(TOP)/mkopcodeh.awk
+opcodes.h:	parse.h $(TOP)/mkopcodeh.awk # $(TOP)/src/vdbe.c 
 	cat parse.h $(TOP)/src/vdbe.c | $(NAWK) -f $(TOP)/mkopcodeh.awk >opcodes.h
 
 # Rules to build parse.c and parse.h - the outputs of lemon.
